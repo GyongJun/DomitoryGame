@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 기숙사 생존게임</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #game-canvas-container {
+            flex: 3;
+            position: relative;
+            background: #2c3e50;
+        }
+        
+        #game-ui {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            min-width: 300px;
+        }
+        
+        #players-list {
+            flex: 1;
+            margin-bottom: 20px;
+        }
+        
+        #chat-container {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #chat-messages {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            overflow-y: auto;
+            max-height: 200px;
+        }
+        
+        #chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        #chat-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        #chat-send {
+            padding: 10px 20px;
+            background: #4ecdc4;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+        }
+        
+        #chat-send:hover {
+            background: #45b7d1;
+        }
+        
+        .player-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .player-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+
+        .player-style {
+            border: 10px solid red;
+        }
+        
+        #name-setup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 1000;
+        }
+        
+        #player-name-input {
+            padding: 15px;
+            font-size: 18px;
+            margin: 20px 0;
+            border: none;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        #start-game {
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #4ecdc4;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <!-- 왼쪽: 게임 화면 -->
+        <div id="game-canvas-container">
+            <canvas id="game-canvas"></canvas>
+            
+            <!-- 이름 설정 팝업 -->
+            <div id="name-setup">
+                <h2>🎮 기숙사 생존게임</h2>
+                <p>당신의 이름을 입력하시오:</p>
+                <input type="text" id="player-name-input" placeholder="이름" maxlength="12">
+                <br>
+                <button id="start-game">게임 시작!</button>
+            </div>
+        </div>
+        
+        <!-- 오른쪽: 게임 UI -->
+        <div id="game-ui">
+            <!-- 플레이어 목록 -->
+            <div id="players-list">
+                <h3>👥 선수 목록</h3>
+                <div id="players-container"></div>
+            </div>
+            
+            <!-- 채팅 -->
+            <div id="chat-container">
+                <h3>💬 채팅</h3>
+                <div id="chat-messages"></div>
+                <div id="chat-input-container">
+                    <input type="text" id="chat-input" placeholder="메시지를 입력하세요...">
+                    <button id="chat-send">전송</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io 클라이언트 라이브러리 -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- 게임 로직 -->
+     <script src="spriteManager.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
