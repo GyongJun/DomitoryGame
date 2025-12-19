@@ -30,7 +30,10 @@ io.on('connection', (socket) => {
         x: x,
         y: y,
         image: getRandomImage(),
-        health: 300
+        health: 300,
+        step: 3,
+        attackTime: null,
+        direction: null
     }
 
     socket.emit('gameInit', {
@@ -46,18 +49,20 @@ io.on('connection', (socket) => {
         if (gameState.players[socket.id]) {
             gameState.players[socket.id].x = movementData.x;
             gameState.players[socket.id].y = movementData.y;
+            gameState.players[socket.id].direction = movementData.direction;
 
             socket.broadcast.emit('playerMoved', {
                 id: socket.id,
                 x: movementData.x,
-                y: movementData.y
+                y: movementData.y,
+                direction: movementData.direction
             });
         }
     });
 
     socket.on('chatMessage', (messageData) => {
         io.emit('chatMessage', {
-            playerId: socker.id,
+            playerId: socket.id,
             playerName: gameState.players[socket.id]?.name || '닉명',
             message: messageData.message,
             timestamp: new Date().toLocaleTimeString()
@@ -78,9 +83,38 @@ io.on('connection', (socket) => {
         io.emit('playerLeft', socket.id);
     });
 
+    socket.on('attackRequested', () => {
+        console.log('공격 요청:', socket.id);
+        let currentTime = Date.now();
+        let attackedPlayers = {};
+        let deadPlayers = {};
+        Object.values(gameState.players).forEach(player => {
+            if (socket.id !== player.id) {
+                let rx = player.x - gameState.players[socket.id].x;
+                let ry = player.y - gameState.players[socket.id].y;
+                if (player.health && Math.sqrt(rx * rx + ry * ry) < 100) {
+                    player.health = Math.max(player.health - 30, 0);
+                    if (player.health == 0) {
+                        let oldImage = player.image;
+                        player.image = oldImage.slice(0, oldImage.length - 4) + '-dead.png';
+                    }
+                    attackedPlayers[player.id] = player.health;
+                }
+            }
+        });
+        socket.broadcast.emit('playerIsAttacking', {
+            id: socket.id,
+            attackTime: currentTime
+        });
+
+        io.emit('attackResult', {
+            attackedPlayers: attackedPlayers
+        });
+    });
+
     function getRandomImage() {
         const images = ['black.png', 'blue.png', 'blue1.png', 'brown.png', 'green.png',
-            'green1.png', 'green2.png', 'red1.png', 'white.png', 'yellow1.png'
+            'green1.png', 'green2.png', 'red1.png', 'white.png', 'yellow1.png', 'pink.png'
         ];
 
         return images[Math.floor(Math.random() * images.length)];

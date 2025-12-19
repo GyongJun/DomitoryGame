@@ -33,7 +33,11 @@ class SpriteManager {
     async preloadImages() {
         const commonImages = [
             'black.png', 'blue.png', 'blue1.png', 'brown.png', 'green.png',
-            'green1.png', 'green2.png', 'red1.png', 'white.png', 'yellow1.png'
+            'green1.png', 'green2.png', 'red1.png', 'white.png', 'yellow1.png',
+            'pink.png',
+            'black-dead.png', 'blue-dead.png', 'blue1-dead.png', 'brown-dead.png', 'green-dead.png',
+            'green1-dead.png', 'green2-dead.png', 'red1-dead.png', 'white-dead.png', 'yellow1-dead.png',
+            'pink-dead.png'
         ];
 
         const loadPromises = commonImages.map(image =>
