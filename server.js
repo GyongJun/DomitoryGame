@@ -2,6 +2,8 @@ const express = require('express')
 const socketio = require('socket.io');
 const path = require('path');
 
+const ItemManager = require('./services/ItemManager');
+
 const app = express();
 app.use(express.static('public'));
 
@@ -11,13 +13,20 @@ const server = app.listen(3000, () => {
 
 app.get('/', (req, res) => {
     res.sendFile(__dirname, 'public', 'index.html');
-})
+});
 
 const io = socketio(server);
+const itemManager = new ItemManager();
+
+setInterval(() => {
+    if (Object.keys(itemManager.items).length <= 10) {
+        itemManager.createItem();
+        io.emit('itemCreated', itemManager.items);
+    }
+}, 3000);
 
 const gameState = {
-    players: {},
-    items: {}
+    players: {}
 }
 
 io.on('connection', (socket) => {
@@ -31,15 +40,16 @@ io.on('connection', (socket) => {
         y: y,
         image: getRandomImage(),
         health: 300,
-        step: 3,
+        speed: 3,
         attackTime: null,
-        direction: null
+        direction: null,
+        crrtStep: 0,
+        items: []
     }
 
     socket.emit('gameInit', {
         playerId: socket.id,
         players: gameState.players,
-        items: gameState.items,
         health: 300
     });
 
@@ -49,13 +59,20 @@ io.on('connection', (socket) => {
         if (gameState.players[socket.id]) {
             gameState.players[socket.id].x = movementData.x;
             gameState.players[socket.id].y = movementData.y;
+            checkNearByItems(socket.id, movementData.x, movementData.y);
+            if (!movementData.moved)
+                gameState.players[socket.id].crrtStep = 0;
+            else {
+                gameState.players[socket.id].crrtStep = 1 + (gameState.players[socket.id].crrtStep + 1) % 40;
+            }   
             gameState.players[socket.id].direction = movementData.direction;
-
+            
             socket.broadcast.emit('playerMoved', {
                 id: socket.id,
                 x: movementData.x,
                 y: movementData.y,
-                direction: movementData.direction
+                direction: movementData.direction,
+                crrtStep: gameState.players[socket.id].crrtStep
             });
         }
     });
@@ -94,10 +111,6 @@ io.on('connection', (socket) => {
                 let ry = player.y - gameState.players[socket.id].y;
                 if (player.health && Math.sqrt(rx * rx + ry * ry) < 100) {
                     player.health = Math.max(player.health - 30, 0);
-                    if (player.health == 0) {
-                        let oldImage = player.image;
-                        player.image = oldImage.slice(0, oldImage.length - 4) + '-dead.png';
-                    }
                     attackedPlayers[player.id] = player.health;
                 }
             }
@@ -112,9 +125,22 @@ io.on('connection', (socket) => {
         });
     });
 
+    socket.on('itemClicked', (indexItem) => {
+        const player = gameState.players[socket.id];
+        if (player && player.items[indexItem]) {
+            const itemType = player.items[indexItem].type;
+            itemEffect(socket.id, itemType);
+            gameState.players[socket.id].items.splice(indexItem, 1);
+            socket.emit('itemUpdated', gameState.players[socket.id].items);
+        }
+        else {
+            console.log('빈 아이템입니다.');
+        }
+    })
+    
     function getRandomImage() {
-        const images = ['black.png', 'blue.png', 'blue1.png', 'brown.png', 'green.png',
-            'green1.png', 'green2.png', 'red1.png', 'white.png', 'yellow1.png', 'pink.png'
+        const images = ['black', 'blue1', 'blue', 'brown', 'green1',
+            'green1', 'pink2', 'pink', 'red', 'white', 'yellow1'
         ];
 
         return images[Math.floor(Math.random() * images.length)];
@@ -137,5 +163,40 @@ io.on('connection', (socket) => {
         }
 
         return [x, y];
+    }
+
+    function checkNearByItems(socketId, x, y) {
+        Object.keys(itemManager.items).forEach(itemId => {
+            if (gameState.players[socketId].items.length < 4) {
+                let currItem = itemManager.items[itemId];
+                let itemX = currItem.x + 20;
+                let itemY = currItem.y + 20;
+                if (isRanged(itemX + 20 - (x + 25), itemY + 20 - (y + 35), 30)) {
+                    gameState.players[socketId].items.push({type: currItem.itemType, image: currItem.itemImage});
+                    delete itemManager.items[itemId];
+                    io.emit('itemReached', itemManager.items);
+                    socket.emit('itemUpdated', gameState.players[socketId].items);
+                }
+            }
+        });
+    }
+
+    function isRanged(x, y, r) {
+        if (Math.sqrt(x * x + y * y) <= r)
+            return true;
+        else 
+            return false;
+    }
+
+    function itemEffect(socketId, itemType) {
+        switch(itemType) {
+            case 'health':
+                const health = Math.min(gameState.players[socketId].health + 150, 300);
+                gameState.players[socketId].health = health;
+                io.emit('healthIncreased', {id: socketId, health: health});
+                break;
+            case 'speedBoots':
+                break;
+        }
     }
 });

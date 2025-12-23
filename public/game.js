@@ -7,7 +7,8 @@ const gameState = {
     canvas: null,
     ctx: null,
     keys: {},
-    timers: {}
+    timers: {},
+    items: {}
 };
 
 const nameSetup = document.getElementById('name-setup');
@@ -15,6 +16,8 @@ const playerNameInput = document.getElementById('player-name-input');
 const startGameBtn = document.getElementById('start-game');
 const playersContainer = document.getElementById('players-container');
 const chatMessages = document.getElementById('chat-messages');
+const itemsContainers = document.getElementsByClassName('item-container');
+let itemDy = 0, itemDirection = 1;
 
 function updatePlayersList() {
     playersContainer.innerHTML = '';
@@ -51,6 +54,7 @@ socket.on('playerMoved', (playerData) => {
         gameState.players[playerData.id].x = playerData.x;
         gameState.players[playerData.id].y = playerData.y;
         gameState.players[playerData.id].direction = playerData.direction;
+        gameState.players[playerData.id].crrtStep = playerData.crrtStep;
     }
 });
 
@@ -62,6 +66,9 @@ socket.on('playerJoined', (player) => {
 
 function initGame() {
     console.log('start initGame');
+
+    UIManager.initAll();
+
     gameState.canvas = document.getElementById('game-canvas');
     gameState.ctx = gameState.canvas.getContext('2d');
 
@@ -90,31 +97,35 @@ function gameLoop() {
 function update() {
     if (!gameState.myPlayerId || !gameState.players[gameState.myPlayerId]) return;
 
-    let currentTime = Date.now();
-
     const myPlayer = gameState.players[gameState.myPlayerId];
     let moved = false;
 
     let oldX = myPlayer.x;
     let oldY = myPlayer.y;
 
+    let vX = 0, vY = 0;
+
     if (myPlayer.health > 0) {
 
         if (gameState.keys['ArrowUp'] || gameState.keys['w']) {
-            myPlayer.y -= myPlayer.step;
+            vY = -1;
+            // myPlayer.y -= myPlayer.speed;
             moved = true;
         }
         if (gameState.keys['ArrowDown'] || gameState.keys['s']) {
-            myPlayer.y += myPlayer.step;
+            vY = 1;
+            // myPlayer.y += myPlayer.speed;
             moved = true;
         }
         if (gameState.keys['ArrowLeft'] || gameState.keys['a']) {
-            myPlayer.x -= myPlayer.step;
+            vX = -1;
+            // myPlayer.x -= myPlayer.speed;
             moved = true;
             myPlayer.direction = "left";
         }
         if (gameState.keys['ArrowRight'] || gameState.keys['d']) {
-            myPlayer.x += myPlayer.step;
+            vX = 1;
+            // myPlayer.x += myPlayer.speed;
             moved = true;
             myPlayer.direction = "right";
         }
@@ -126,6 +137,10 @@ function update() {
             }
         }
 
+        myPlayer.y += myPlayer.speed * vY * Math.sqrt(2 - vX * vX) / Math.sqrt(2);
+        myPlayer.x += myPlayer.speed * vX * Math.sqrt(2 - vY * vY) / Math.sqrt(2);
+
+
         // 화면 경계 체크
         myPlayer.x = Math.max(0, Math.min(gameState.canvas.width - 30, myPlayer.x));
         myPlayer.y = Math.max(0, Math.min(gameState.canvas.height - 30, myPlayer.y));
@@ -136,18 +151,23 @@ function update() {
 
 
         // 이동 시 서버에 알림
-        if (moved) {
-            if(!isValidPosition(myPlayer.x, myPlayer.y)) {
-                myPlayer.x = oldX;
-                myPlayer.y = oldY;
-                console.log(isValidPosition(myPlayer.x, myPlayer.y));
-            }
-            socket.emit('playerMove', {
-                x: myPlayer.x,
-                y: myPlayer.y,
-                direction: myPlayer.direction
-            });
+        if(!isValidPosition(myPlayer.x, myPlayer.y)) {
+            myPlayer.x = oldX;
+            myPlayer.y = oldY;
         }
+
+        if(!moved)
+            myPlayer.crrtStep = 0;
+        else {
+            myPlayer.crrtStep = 1 + (myPlayer.crrtStep + 1) % 40;
+        }
+
+        socket.emit('playerMove', {
+            x: myPlayer.x,
+            y: myPlayer.y,
+            moved: moved,
+            direction: myPlayer.direction
+        });
     }
 }
 
@@ -171,7 +191,6 @@ socket.on('playerUpdated', (player) => {
 socket.on('playerLeft', (playerId) => {
     const playerName = gameState.players[playerId]?.name || '익명';
     delete gameState.players[playerId];
-    console.log('delete complete');
     updatePlayersList();
     addChatMessage('시스템', `${playerName} 플레이어가 나갔습니다.`, new Date().toLocaleTimeString());
 });
@@ -225,8 +244,16 @@ function render() {
                 ctx.fill();
             }
         }
-        
     });
+
+    Object.values(gameState.items).forEach(item => {
+        // 그림자만 그리기 (객체는 아님)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.ellipse(item.x + 20, item.y + 50, 20, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    
 
     
     ctx.restore();
@@ -234,8 +261,38 @@ function render() {
     //     getInitialPostion();
     // }
 
+    if (itemDirection == 1) {
+        if (itemDy < 2) {
+            itemDy += 0.1;
+        }
+        else itemDirection = -1;
+    } 
+    else {
+        if (itemDy > 0) {
+            itemDy -= 0.1;
+        }
+        else itemDirection = 1;
+    }
+    Object.values(gameState.items).forEach(item => {
+        const boxImage = spriteManager.getImage(item.boxImage);
+        const itemImage = spriteManager.getImage(item.itemImage);
+        if (boxImage && boxImage.complete) {
+            ctx.drawImage(boxImage, item.x, item.y + itemDy, 40, 40);
+        }
+    });
+
     Object.values(gameState.players).forEach(player => {
-        const playerImage = spriteManager.getImage(player.image);
+        let imagePath;
+        let playerImage;
+        let crrtFrame = Math.ceil(player.crrtStep / 10);
+        if (player.health == 0) {
+            imagePath = basePath[0] + player.image + extensions[0];
+            playerImage = spriteManager.getImage(imagePath);
+        }
+        else  if (player.health > 0) {
+            imagePath = basePath[1 + crrtFrame] + player.image + extensions[1 + crrtFrame];
+            playerImage = spriteManager.getImage(imagePath);
+        }
         // const image = path.join(__dirname, '../assets/' + player.image);
         if(playerImage && playerImage.complete) {
             if (player.direction === "left") {
@@ -271,10 +328,7 @@ function render() {
         ctx.fillStyle = 'white';
         ctx.font = '12px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(player.name || '닉명', player.x + 15, player.y - 5);
-
-
-        
+        ctx.fillText(player.name || '닉명', player.x + 15, player.y - 5);        
     });
 }
 
@@ -291,7 +345,6 @@ window.addEventListener('resize', () => {
 // 움직이려는 위치가 다른 객체들과 겹치지 않는지 검사
 function isValidPosition (x, y) {
     let isValid = 1;
-    console.log('validFunction');
     for (const player of Object.values(gameState.players)) {
         if (player.id === gameState.myPlayerId)
             continue;
@@ -313,11 +366,90 @@ socket.on('playerIsAttacking', (data) => {
 socket.on('attackResult', (data) => {
     Object.keys(data.attackedPlayers).forEach(playerId => {
         gameState.players[playerId].health = data.attackedPlayers[playerId];
-        if (gameState.players[playerId].health == 0) {
-            let oldImage = gameState.players[playerId].image;
-            console.log(oldImage);
-            gameState.players[playerId].image = oldImage.slice(0, oldImage.length - 4) + '-dead.png';
-            console.log(gameState.players[playerId].image);
-        }
     });
+});
+
+socket.on('itemCreated', (data) => {
+    gameState.items = data;
+});
+
+socket.on('itemReached', (items) => {
+    gameState.items = items;
+});
+
+socket.on('itemUpdated', (items) => {
+    gameState.players[gameState.myPlayerId].items = items;
+    const myPlayerId= gameState.myPlayerId;
+    const myPlayer = gameState.players[myPlayerId];
+    UIManager.inventory.update(myPlayer.items);
+});
+
+socket.on('healthIncreased', (data) => {
+    gameState.players[data.id].health = data.health;
+    console.log('health 증가');
 })
+
+function itemUIUptdated() {
+    const player = gameState.players[myPlayerId];
+    for (let i = 0; i < player.length; i++) {
+        itemsContainer[i].style.backgroundImage = u
+    }
+}
+
+const UIManager = {
+    inventory: {
+        containers: null,
+
+        init() {
+            this.containers = document.querySelectorAll('.item-container');
+            this.setupEvents();
+        },
+
+        setupEvents() {
+            this.containers.forEach((container, index) => {
+                container.addEventListener('click', () => {
+                    this.useItem(index);
+                });
+            });
+        },
+
+        useItem(index) {
+            console.log(`아이템 ${index} 사용`);
+            socket.emit('itemClicked', index);
+        },
+
+        update(playerItems) {
+            if (!playerItems)
+                return;
+
+            playerItems.forEach((item, index) => {
+                this.updateSlot(index, item);
+            });
+
+            for (let i = playerItems.length; i < 4; i++) {
+                this.clearSlot(i);
+            }
+        },
+
+        updateSlot(index, item) {
+            const container = this.containers[index];
+            container.style.backgroundImage = `url('${item.image}')`;
+            container.style.backgroundSize = 'cover';
+            container.dataset.itemType = item.type;
+            
+            container.classList.add('item-acquired');
+        },
+
+        clearSlot(index) {
+            const container = this.containers[index];
+            container.style.backgroundImage = 'none';
+            container.dataset.itemType = '';
+        }    
+    },
+
+    
+    initAll() {
+        this.inventory.init();
+    }
+}
+
