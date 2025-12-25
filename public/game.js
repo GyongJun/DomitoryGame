@@ -223,25 +223,27 @@ function render() {
 
     ctx.save();
     Object.values(gameState.players).forEach(player => {
-        // 그림자만 그리기 (객체는 아님)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.beginPath();
-        ctx.ellipse(player.x + 25, player.y + 75, 30, 10, 0, 0, Math.PI * 2);
-        ctx.fill();
+        if ((player.id == gameState.myPlayerId) || (player.visibility)) {
+            // 그림자만 그리기 (객체는 아님)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.beginPath();
+            ctx.ellipse(player.x + 25, player.y + 75, 30, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
 
-        // 공격효과 현시
-        if(player.attackTime) {
-            let currentTime = Date.now();
-            let startTime = player.attackTime;
-            if (currentTime - startTime > 300)
-                player.attackTime = null;
-            else {
-                radiusX = 100 * (currentTime - startTime) / 300;     
-                radiusY = 15 * (currentTime- startTime) / 300;
-                ctx.fillStyle = 'rgba(247, 240, 48, 0.6)';
-                ctx.beginPath();
-                ctx.ellipse(player.x + 25, player.y + 75, radiusX, radiusY, 0, 0, Math.PI * 2);
-                ctx.fill();
+            // 공격효과 현시
+            if(player.attackTime) {
+                let currentTime = Date.now();
+                let startTime = player.attackTime;
+                if (currentTime - startTime > 300)
+                    player.attackTime = null;
+                else {
+                    radiusX = 100 * (currentTime - startTime) / 300;     
+                    radiusY = 15 * (currentTime- startTime) / 300;
+                    ctx.fillStyle = 'rgba(247, 240, 48, 0.6)';
+                    ctx.beginPath();
+                    ctx.ellipse(player.x + 25, player.y + 75, radiusX, radiusY, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
     });
@@ -282,53 +284,55 @@ function render() {
     });
 
     Object.values(gameState.players).forEach(player => {
-        let imagePath;
-        let playerImage;
-        let crrtFrame = Math.ceil(player.crrtStep / 10);
-        if (player.health == 0) {
-            imagePath = basePath[0] + player.image + extensions[0];
-            playerImage = spriteManager.getImage(imagePath);
-        }
-        else  if (player.health > 0) {
-            imagePath = basePath[1 + crrtFrame] + player.image + extensions[1 + crrtFrame];
-            playerImage = spriteManager.getImage(imagePath);
-        }
-        // const image = path.join(__dirname, '../assets/' + player.image);
-        if(playerImage && playerImage.complete) {
-            if (player.direction === "left") {
-                ctx.save();
-                ctx.scale(-1, 1);
-                ctx.drawImage(playerImage, -player.x - 50, player.y, 50, 70);
-                ctx.restore();
+        if ((player.id == gameState.myPlayerId) || (player.visibility)) {
+            let imagePath;
+            let playerImage;
+            let crrtFrame = Math.ceil(player.crrtStep / 10);
+            if (player.health == 0) {
+                imagePath = basePath[0] + player.image + extensions[0];
+                playerImage = spriteManager.getImage(imagePath);
             }
-            else {
-                ctx.drawImage(playerImage, player.x, player.y, 50, 70);
+            else  if (player.health > 0) {
+                imagePath = basePath[1 + crrtFrame] + player.image + extensions[1 + crrtFrame];
+                playerImage = spriteManager.getImage(imagePath);
             }
-        } else {
-            ctx.fillStyle = "#ff6b6b";
-            ctx.fillRect(player.x, player.y, 50, 70);
+            // const image = path.join(__dirname, '../assets/' + player.image);
+            if(playerImage && playerImage.complete) {
+                if (player.direction === "left") {
+                    ctx.save();
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(playerImage, -player.x - 50, player.y, 50, 70);
+                    ctx.restore();
+                }
+                else {
+                    ctx.drawImage(playerImage, player.x, player.y, 50, 70);
+                }
+            } else {
+                ctx.fillStyle = "#ff6b6b";
+                ctx.fillRect(player.x, player.y, 50, 70);
+            }
+
+            // 남은 피 현시
+            ctx.strokeStyle = 'red'
+            ctx.lineWidth = 1;
+
+            ctx.beginPath();
+            ctx.moveTo(player.x, player.y - 3);
+            ctx.lineTo(player.x + Math.floor(50 * (player.health) / 300), player.y - 3);
+            ctx.stroke();
+
+            // 줄어든 피 현시    
+            ctx.strokeStyle = 'black';
+            ctx.beginPath();
+            ctx.moveTo(player.x + Math.floor(50 * (player.health) / 300), player.y - 3);
+            ctx.lineTo(player.x + 50, player.y - 3);
+            ctx.stroke();
+
+            ctx.fillStyle = 'white';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(player.name || '닉명', player.x + 15, player.y - 5);
         }
-
-        // 남은 피 현시
-        ctx.strokeStyle = 'red'
-        ctx.lineWidth = 1;
-
-        ctx.beginPath();
-        ctx.moveTo(player.x, player.y - 3);
-        ctx.lineTo(player.x + Math.floor(50 * (player.health) / 300), player.y - 3);
-        ctx.stroke();
-
-        // 줄어든 피 현시    
-        ctx.strokeStyle = 'black';
-        ctx.beginPath();
-        ctx.moveTo(player.x + Math.floor(50 * (player.health) / 300), player.y - 3);
-        ctx.lineTo(player.x + 50, player.y - 3);
-        ctx.stroke();
-
-        ctx.fillStyle = 'white';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(player.name || '닉명', player.x + 15, player.y - 5);        
     });
 }
 
@@ -360,7 +364,10 @@ function isValidPosition (x, y) {
 
 //일반공격 효과
 socket.on('playerIsAttacking', (data) => {
-    gameState.players[data.id].attackTime = data.attackTime; 
+    gameState.players[data.id].attackTime = data.attackTime;
+    if (!gameState.players[data.id].visibility) {
+        gameState.players[data.id].visibility = 1;
+    }
 });
 
 socket.on('attackResult', (data) => {
@@ -389,12 +396,21 @@ socket.on('healthIncreased', (data) => {
     console.log('health 증가');
 })
 
-function itemUIUptdated() {
-    const player = gameState.players[myPlayerId];
-    for (let i = 0; i < player.length; i++) {
-        itemsContainer[i].style.backgroundImage = u
-    }
-}
+socket.on('movingSpeedChanged', (data) => {
+    gameState.players[data.id].speed = data.speed;
+})
+
+socket.on('playerVisibility', (data) => {
+    gameState.players[data.id].visibility = data.visibility;
+});
+
+
+socket.on('playersRespawned', (playersData) => {
+    playersData.forEach(playerData => {
+        gameState.players[playerData.id] = playerData.player;
+    });
+});
+
 
 const UIManager = {
     inventory: {

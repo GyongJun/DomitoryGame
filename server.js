@@ -41,10 +41,14 @@ io.on('connection', (socket) => {
         image: getRandomImage(),
         health: 300,
         speed: 3,
+        damage: 30,
+        haste: [],
+        strength: [],
+        visibility: 1,
         attackTime: null,
         direction: null,
         crrtStep: 0,
-        items: []
+        items: [],
     }
 
     socket.emit('gameInit', {
@@ -101,20 +105,42 @@ io.on('connection', (socket) => {
     });
 
     socket.on('attackRequested', () => {
-        console.log('공격 요청:', socket.id);
         let currentTime = Date.now();
         let attackedPlayers = {};
-        let deadPlayers = {};
+        let deadPlayers = [];
+        let damage = gameState.players[socket.id].damage;
+
+        if (!gameState.players[socket.id].visibility) {
+            gameState.players[socket.id].visibility = 1;
+        }
+        
         Object.values(gameState.players).forEach(player => {
             if (socket.id !== player.id) {
                 let rx = player.x - gameState.players[socket.id].x;
                 let ry = player.y - gameState.players[socket.id].y;
                 if (player.health && Math.sqrt(rx * rx + ry * ry) < 100) {
-                    player.health = Math.max(player.health - 30, 0);
+                    player.health = Math.max(player.health - damage, 0);
+                    if (!player.health)
+                        deadPlayers.push(player.id);
                     attackedPlayers[player.id] = player.health;
                 }
             }
         });
+
+        setTimeout(() => {
+            if (deadPlayers.length > 0) {
+                respawnedPlayers = [];
+                deadPlayers.forEach(playerId => {
+                    const [x, y] = getInitialXY();
+                    gameState.players[playerId].x = x;
+                    gameState.players[playerId].y = y;
+                    gameState.players[playerId].visibility = 1;
+                    gameState.players[playerId].health = 300;
+                    respawnedPlayers.push({id: playerId, player: gameState.players[playerId]});
+                });
+                io.emit('playersRespawned', respawnedPlayers);
+            }
+        }, 10000);
         socket.broadcast.emit('playerIsAttacking', {
             id: socket.id,
             attackTime: currentTime
@@ -128,6 +154,10 @@ io.on('connection', (socket) => {
     socket.on('itemClicked', (indexItem) => {
         const player = gameState.players[socket.id];
         if (player && player.items[indexItem]) {
+            if (!player.visibility) {
+                gameState.players[socket.id].visibility = 1;
+                io.emit('playerVisibility', {id: socket.id, visibility: gameState.players[socket.id].visibility});
+            }
             const itemType = player.items[indexItem].type;
             itemEffect(socket.id, itemType);
             gameState.players[socket.id].items.splice(indexItem, 1);
@@ -196,6 +226,36 @@ io.on('connection', (socket) => {
                 io.emit('healthIncreased', {id: socketId, health: health});
                 break;
             case 'speedBoots':
+                const speed = gameState.players[socketId].speed;
+                const increasedSpeed = Math.min(speed * 1.2, 4.5);
+                gameState.players[socketId].haste.push(speed);
+                gameState.players[socketId].speed = increasedSpeed;
+                io.emit('movingSpeedChanged', {id: socketId, speed: increasedSpeed});
+                setTimeout(() => {
+                    const initialSpeed = gameState.players[socketId].haste.pop();
+                    gameState.players[socketId].speed = initialSpeed;
+                    io.emit('movingSpeedChanged', {id: socketId, speed: initialSpeed});
+                }, 4000);
+                break;
+            case 'windoc':
+                gameState.players[socketId].visibility = 0;
+                io.emit('playerVisibility', {id: socketId, visibility: gameState.players[socketId].visibility});
+                setTimeout(() => {
+                    if (!gameState.players[socketId].visibility) {
+                        gameState.players[socketId].visibility = 1;
+                        io.emit('playerVisibility', {id: socketId, visibility: gameState.players[socketId].visibility});
+                    }
+                }, 15000);
+                break;
+            case 'strength':
+                const strength = gameState.players[socketId].damage;
+                const increasedStrength = Math.min(strength * 1.3, 100);
+                gameState.players[socketId].strength.push(strength);
+                gameState.players[socketId].damage = increasedStrength;
+                setTimeout(() => {
+                    const initialStrength = gameState.players[socketId].strength.pop();
+                    gameState.players[socketId].damage = initialStrength;
+                }, 3000);
                 break;
         }
     }
