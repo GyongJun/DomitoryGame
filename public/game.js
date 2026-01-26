@@ -298,6 +298,8 @@ function render() {
             }
             // const image = path.join(__dirname, '../assets/' + player.image);
             if(playerImage && playerImage.complete) {
+                if (!player.visibility)
+                    ctx.globalAlpha = 0.3;
                 if (player.direction === "left") {
                     ctx.save();
                     ctx.scale(-1, 1);
@@ -307,11 +309,12 @@ function render() {
                 else {
                     ctx.drawImage(playerImage, player.x, player.y, 50, 70);
                 }
+                if (ctx.globalAlpha == 0.3)
+                    ctx.globalAlpha = 1;
             } else {
                 ctx.fillStyle = "#ff6b6b";
                 ctx.fillRect(player.x, player.y, 50, 70);
             }
-
             // 남은 피 현시
             ctx.strokeStyle = 'red'
             ctx.lineWidth = 1;
@@ -365,12 +368,13 @@ function isValidPosition (x, y) {
 //일반공격 효과
 socket.on('playerIsAttacking', (data) => {
     gameState.players[data.id].attackTime = data.attackTime;
-    if (!gameState.players[data.id].visibility) {
-        gameState.players[data.id].visibility = 1;
-    }
 });
 
 socket.on('attackResult', (data) => {
+    if (!gameState.players[data.id].visibility) {
+        gameState.players[data.id].visibility = 1;
+    }
+
     Object.keys(data.attackedPlayers).forEach(playerId => {
         gameState.players[playerId].health = data.attackedPlayers[playerId];
     });
